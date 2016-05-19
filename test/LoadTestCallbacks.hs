@@ -8,6 +8,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
@@ -15,8 +17,12 @@
 module LoadTestCallbacks where
 
 import Bio.Motions.Callback.Class
+import Bio.Motions.Callback.Serialisation
 import Bio.Motions.Callback.Parser.TH
 import Bio.Motions.Callback.Periodic
+
+import GHC.Generics
+import Control.DeepSeq
 
 [callback|CALLBACK "sum42-beads"
     EVERY ACCEPTED 1
@@ -57,6 +63,11 @@ import Bio.Motions.Callback.Periodic
 
 data EmptyCallback
 deriving instance Show EmptyCallback
+deriving instance Generic EmptyCallback
+deriving instance NFData EmptyCallback
+
+instance CallbackSerialisable EmptyCallback where
+    serialiseCallback _ = error "Empty Callback"
 
 instance Callback 'Pre EmptyCallback where
     callbackName _ = "_empty"

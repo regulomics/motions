@@ -35,9 +35,11 @@ import Language.Haskell.TH.Syntax
 import Bio.Motions.Callback.Class hiding (CallbackResult)
 import Bio.Motions.Callback.Parser.Parser
 import Bio.Motions.Callback.Periodic
+import Bio.Motions.Callback.Serialisation
 import Bio.Motions.Representation.Class
 import Bio.Motions.Types
 import Bio.Motions.Common
+import Control.DeepSeq
 import Control.Lens
 import Data.Foldable
 import Data.Maybe
@@ -74,9 +76,12 @@ deriving instance Enum (THCallbackResult name) => Enum (THCallback name)
 deriving instance Real (THCallbackResult name) => Real (THCallback name)
 deriving instance Integral (THCallbackResult name) => Integral (THCallback name)
 deriving instance Read (THCallbackResult name) => Read (THCallback name)
+deriving instance NFData (THCallbackResult name) => NFData (THCallback name)
 
 instance Show (THCallbackResult name) => Show (THCallback name) where
     show = show . getTHCallback
+
+deriving instance CallbackSerialisable (THCallbackResult name) => CallbackSerialisable (THCallback name)
 
 -- |An auxiliary class used for lifting types into type expressions.
 class LiftProxy a where

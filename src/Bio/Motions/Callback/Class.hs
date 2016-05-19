@@ -19,16 +19,20 @@ module Bio.Motions.Callback.Class where
 
 import Bio.Motions.Types
 import Bio.Motions.Representation.Class
+import Bio.Motions.Callback.Serialisation
 
 import Data.Proxy
+import Control.DeepSeq
+
+
+type Callbacks = ([CallbackResult 'Pre], [CallbackResult 'Post])
 
 -- |Represents the mode of a callback
 data Mode = Pre  -- ^Such a callback will be fired before a move is made
           | Post -- ^Such a callback will be fired after a move is made
 
 -- |Represents a callback
---
-class Show cb => Callback (mode :: Mode) cb | cb -> mode where
+class (Show cb, CallbackSerialisable cb, NFData cb) => Callback (mode :: Mode) cb | cb -> mode where
     -- |A human-readable name of the callback.
     callbackName :: proxy cb -> String
 
@@ -53,10 +57,14 @@ class Show cb => Callback (mode :: Mode) cb | cb -> mode where
     default updateCallback :: (Monad m, ReadRepresentation m repr, mode ~ 'Post)
         => repr -> cb -> Move -> m cb
     updateCallback repr _ _ = runCallback repr
+    {-# INLINEABLE updateCallback #-}
 
 -- |An existential wrapper around a 'Callback''s result.
 data CallbackResult mode where
-    CallbackResult :: Callback mode cb => cb -> CallbackResult mode
+    CallbackResult :: (Callback mode cb) => !cb -> CallbackResult mode
+
+instance NFData (CallbackResult mode) where
+    rnf (CallbackResult cb) = rnf cb
 
 -- |An existential wrapper around a 'Callback''s type.
 data CallbackType mode where
@@ -69,16 +77,19 @@ getCallbackName _ = callbackName (Proxy :: Proxy cb)
 getCallbackResult :: forall m repr mode. (Monad m, ReadRepresentation m repr) =>
     repr -> CallbackType mode -> m (CallbackResult mode)
 getCallbackResult repr (CallbackType (_ :: Proxy cb)) = CallbackResult <$> (runCallback repr :: m cb)
+{-# INLINEABLE getCallbackResult #-}
 
 -- |Runs all 'Callback's in a list and returns the list of results.
 getCallbackResults :: (Traversable t, Monad m, ReadRepresentation m repr) =>
     repr -> t (CallbackType mode) -> m (t (CallbackResult mode))
 getCallbackResults = traverse . getCallbackResult
+{-# INLINEABLE getCallbackResults #-}
 
 -- |Updates a 'Callback''s result in a monad after a move.
 updateCallbackResult :: (Monad m, ReadRepresentation m repr) =>
     repr -> Move -> CallbackResult mode -> m (CallbackResult mode)
 updateCallbackResult repr move (CallbackResult cb) = CallbackResult <$> updateCallback repr cb move
+{-# INLINEABLE updateCallbackResult #-}
 
 -- |An alias for a particularily important class of callbacks, viz. score functions.
 -- TODO: better serializability constraint

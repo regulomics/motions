@@ -15,6 +15,8 @@ Portability : unportable
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 module Bio.Motions.Types where
 
@@ -23,6 +25,10 @@ import Data.Functor.Identity
 import qualified Data.Vector.Unboxed as U
 import GHC.Exts
 import Control.Lens.TH
+import Data.Profunctor.Unsafe
+
+import GHC.Generics (Generic)
+import Control.DeepSeq
 
 -- |An alias used for representing energy.
 type Energy = Int
@@ -31,16 +37,16 @@ type Energy = Int
 -- EnergyVectors must have at least one element. The first element always represents
 -- the energy of binding with lamins.
 newtype EnergyVector = EnergyVector { getEnergyVector :: U.Vector Int }
-    deriving (Eq, Show, Ord)
+    deriving (Eq, Show, Ord, Generic, NFData)
 
 instance IsList EnergyVector where
     type Item EnergyVector = Int
-    fromList = EnergyVector . fromList
-    toList = toList . getEnergyVector
+    fromList = EnergyVector #. fromList
+    toList = toList .# getEnergyVector
 
 -- |Represents a binder type
 newtype BinderType = BinderType { getBinderType :: Int }
-    deriving (Eq, Show, Ord)
+    deriving (Eq, Show, Ord, Generic, NFData)
 
 -- |Represents a chain identifier
 type ChainId = Int
@@ -62,7 +68,7 @@ makeClassy ''BeadSignature
 newtype BinderSignature = BinderSignature
     { _binderType :: BinderType -- ^ The type of the binder
     }
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, NFData)
 makeClassy ''BinderSignature
 
 -- |Adds position information to an arbitrary object.
@@ -79,6 +85,9 @@ makeLenses ''Located'
 deriving instance (Eq a, Eq (f Vec3)) => Eq (Located' f a)
 deriving instance (Show a, Show (f Vec3)) => Show (Located' f a)
 
+deriving instance (Generic a, Generic (f Vec3)) => Generic (Located' f a)
+deriving instance (Generic a, Generic (f Vec3), NFData a, NFData (f Vec3)) => NFData (Located' f a)
+
 type Located = Located' Identity
 
 type BeadInfo' f = Located' f BeadSignature
@@ -92,7 +101,7 @@ data Move = Move
     { moveFrom :: !Vec3 -- ^ The previous location of the atom
     , moveDiff :: !Vec3 -- ^ The displacement
     }
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, NFData)
 
 pattern MoveFromTo from to <- Move from ((+from) -> to) where
     MoveFromTo from to = Move from (to - from)
@@ -110,11 +119,6 @@ pattern Binder b <- Located' _ (BinderSig b)
 pattern Located p x = Located' (Identity p) x
 pattern BinderInfo pos binderType = Located pos (BinderSignature binderType)
 pattern BeadInfo pos ev atomIx chainIx ixOnChain = Located pos (BeadSignature ev atomIx chainIx ixOnChain)
-
--- |Represents an additional addition or removal of a binder
--- due to a 'Move'.
-data BinderChange = AddBinder BinderInfo -- ^ Addition of a binder
-                  | RemoveBinder BinderInfo -- ^ Removal of a binder
 
 instance HasBeadSignature (BeadInfo' f) where
     beadSignature = located

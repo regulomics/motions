@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
@@ -26,11 +27,10 @@ import Bio.Motions.Callback.StandardScore
 import Bio.Motions.Callback.GyrationRadius
 import Bio.Motions.Callback.Parser.TH
 import Bio.Motions.Representation.Dump
+import Bio.Motions.Utils.Random
 
 import Control.Monad
-import Control.Monad.Random
 import Control.Monad.Trans
-import Control.Monad.Trans.Maybe
 import Control.Lens
 import Data.Maybe
 import Data.MonoTraversable
@@ -41,10 +41,10 @@ shouldAlmostBe :: (Fractional a, Ord a, Show a) => a -> a -> Expectation
 x `shouldAlmostBe` y = abs (x - y) `shouldSatisfy` (< 1e-7)
 
 instance MonadRandom m => MonadRandom (PropertyM m) where
+    type Random (PropertyM m) = Random m
+
     getRandom = lift getRandom
-    getRandoms = lift getRandoms
     getRandomR = lift . getRandomR
-    getRandomRs = lift . getRandomRs
 
 testIntersectsChain :: Spec
 testIntersectsChain = do
@@ -73,11 +73,11 @@ testRepr (_ :: _ repr) = before (loadDump dump freezePredicate :: IO repr) $ do
     context "when generating a move"
         testGenerateMove
 
-    beforeWith (\repr -> fst <$> performMove beadMove repr) $
+    beforeWith (performMove beadMove) $
         context "after making a bead move" $ do
             testAfterBeadMove
 
-            beforeWith (\repr -> fst <$> performMove binderMove repr) $
+            beforeWith (performMove binderMove) $
                 context "after making a binder move"
                     testAfterBinderMove
   where
@@ -347,10 +347,9 @@ testRepr (_ :: _ repr) = before (loadDump dump freezePredicate :: IO repr) $ do
                 BinderSig binder -> assert $ binder ^. binderType /= laminType
                 BeadSig bead -> assert . not . freezePredicate $ bead ^. beadSignature
       where
-        prepareMoves repr = (repr,) . catMaybes <$>
-            (replicateM 1000 . runMaybeT $ generateMove repr)
+        prepareMoves repr = (repr,) . catMaybes <$> replicateM 1000 (runWithRandom $ generateMove repr)
         getAtoms (repr, moves) = forM moves $ flip getAtomAt repr . moveFrom
-        genMove repr = runMaybeT (generateMove repr) >>= maybe (stop rejected) pure
+        genMove repr = lift (runWithRandom $ generateMove repr) >>= maybe (stop rejected) pure
 
 spec :: Spec
 spec = do
